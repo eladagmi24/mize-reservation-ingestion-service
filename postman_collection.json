@@ -1,0 +1,538 @@
+{
+  "info": {
+    "name": "Supplier Feed Throttle & Dedup Service",
+    "description": "Reservation ingestion API with per-supplier rolling-window throttling (100 requests / 60 seconds) and idempotent dedup. Set the baseUrl collection variable to match the running API.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Ingest Endpoints",
+      "description": "Run this folder in order (Collection Runner, one iteration). The first request generates a unique supplier and reservation for the run.",
+      "item": [
+        {
+          "name": "Ingest New Reservation (201 Created)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const runId = Date.now().toString();",
+                  "pm.collectionVariables.set('runId', runId);",
+                  "pm.collectionVariables.set('supplierId', 'supplier-' + runId);",
+                  "pm.collectionVariables.set('reservationId', 'reservation-' + runId);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ingestSchema = { type: 'object', required: ['status', 'message'], properties: { status: { type: 'string', enum: ['Conflict', 'Created', 'Duplicate', 'StaleIgnored', 'Throttled', 'Updated'] }, message: { type: 'string', minLength: 1 } } };",
+                  "pm.test('Status code is 201 Created', function () { pm.response.to.have.status(201); });",
+                  "pm.test('Response is JSON', function () { pm.response.to.be.json; });",
+                  "pm.test('Body matches the ingest response schema', function () { pm.response.to.have.jsonSchema(ingestSchema); });",
+                  "pm.test('Outcome status is Created', function () { pm.expect(pm.response.json().status).to.eql('Created'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"{{supplierId}}\",\n  \"reservationId\": \"{{reservationId}}\",\n  \"roomId\": \"room-101\",\n  \"checkIn\": \"2026-08-01T00:00:00Z\",\n  \"checkOut\": \"2026-08-03T00:00:00Z\",\n  \"price\": 450.00,\n  \"updatedAtUtc\": \"2026-07-01T10:15:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "ingest"
+              ]
+            },
+            "description": "First time this supplierId + reservationId is seen. Generates fresh identifiers for the run."
+          }
+        },
+        {
+          "name": "Resend Identical Reservation (200 OK - Duplicate)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ingestSchema = { type: 'object', required: ['status', 'message'], properties: { status: { type: 'string', enum: ['Conflict', 'Created', 'Duplicate', 'StaleIgnored', 'Throttled', 'Updated'] }, message: { type: 'string', minLength: 1 } } };",
+                  "pm.test('Status code is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response is JSON', function () { pm.response.to.be.json; });",
+                  "pm.test('Body matches the ingest response schema', function () { pm.response.to.have.jsonSchema(ingestSchema); });",
+                  "pm.test('Outcome status is Duplicate', function () { pm.expect(pm.response.json().status).to.eql('Duplicate'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"{{supplierId}}\",\n  \"reservationId\": \"{{reservationId}}\",\n  \"roomId\": \"room-101\",\n  \"checkIn\": \"2026-08-01T00:00:00Z\",\n  \"checkOut\": \"2026-08-03T00:00:00Z\",\n  \"price\": 450.00,\n  \"updatedAtUtc\": \"2026-07-01T10:15:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "ingest"
+              ]
+            },
+            "description": "Same business fields as the stored record. Nothing is written."
+          }
+        },
+        {
+          "name": "Update Existing Reservation Newer Date (200 OK - Updated)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ingestSchema = { type: 'object', required: ['status', 'message'], properties: { status: { type: 'string', enum: ['Conflict', 'Created', 'Duplicate', 'StaleIgnored', 'Throttled', 'Updated'] }, message: { type: 'string', minLength: 1 } } };",
+                  "pm.test('Status code is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response is JSON', function () { pm.response.to.be.json; });",
+                  "pm.test('Body matches the ingest response schema', function () { pm.response.to.have.jsonSchema(ingestSchema); });",
+                  "pm.test('Outcome status is Updated', function () { pm.expect(pm.response.json().status).to.eql('Updated'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"{{supplierId}}\",\n  \"reservationId\": \"{{reservationId}}\",\n  \"roomId\": \"room-101\",\n  \"checkIn\": \"2026-08-01T00:00:00Z\",\n  \"checkOut\": \"2026-08-03T00:00:00Z\",\n  \"price\": 500,\n  \"updatedAtUtc\": \"2026-07-02T10:15:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "ingest"
+              ]
+            },
+            "description": "Changed price with a newer updatedAtUtc replaces the stored record."
+          }
+        },
+        {
+          "name": "Send Stale Update Older Date (200 OK - StaleIgnored)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ingestSchema = { type: 'object', required: ['status', 'message'], properties: { status: { type: 'string', enum: ['Conflict', 'Created', 'Duplicate', 'StaleIgnored', 'Throttled', 'Updated'] }, message: { type: 'string', minLength: 1 } } };",
+                  "pm.test('Status code is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Response is JSON', function () { pm.response.to.be.json; });",
+                  "pm.test('Body matches the ingest response schema', function () { pm.response.to.have.jsonSchema(ingestSchema); });",
+                  "pm.test('Outcome status is StaleIgnored', function () { pm.expect(pm.response.json().status).to.eql('StaleIgnored'); });",
+                  "pm.test('Message explains the update is older', function () { pm.expect(pm.response.json().message).to.include('older'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"{{supplierId}}\",\n  \"reservationId\": \"{{reservationId}}\",\n  \"roomId\": \"room-101\",\n  \"checkIn\": \"2026-08-01T00:00:00Z\",\n  \"checkOut\": \"2026-08-03T00:00:00Z\",\n  \"price\": 300,\n  \"updatedAtUtc\": \"2026-06-01T10:15:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "ingest"
+              ]
+            },
+            "description": "Different details with an older updatedAtUtc are ignored and the stored record is preserved."
+          }
+        },
+        {
+          "name": "Send Conflicting Data Same Timestamp (409 Conflict)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ingestSchema = { type: 'object', required: ['status', 'message'], properties: { status: { type: 'string', enum: ['Conflict', 'Created', 'Duplicate', 'StaleIgnored', 'Throttled', 'Updated'] }, message: { type: 'string', minLength: 1 } } };",
+                  "pm.test('Status code is 409 Conflict', function () { pm.response.to.have.status(409); });",
+                  "pm.test('Response is JSON', function () { pm.response.to.be.json; });",
+                  "pm.test('Body matches the ingest response schema', function () { pm.response.to.have.jsonSchema(ingestSchema); });",
+                  "pm.test('Outcome status is Conflict', function () { pm.expect(pm.response.json().status).to.eql('Conflict'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"{{supplierId}}\",\n  \"reservationId\": \"{{reservationId}}\",\n  \"roomId\": \"room-101\",\n  \"checkIn\": \"2026-08-01T00:00:00Z\",\n  \"checkOut\": \"2026-08-03T00:00:00Z\",\n  \"price\": 999,\n  \"updatedAtUtc\": \"2026-07-02T10:15:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "ingest"
+              ]
+            },
+            "description": "Different details carrying the same updatedAtUtc as the stored record cannot be ordered, so they are rejected."
+          }
+        },
+        {
+          "name": "Send Invalid Payload (400 Bad Request)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const problemSchema = { type: 'object', required: ['status', 'errors'], properties: { status: { type: 'integer', enum: [400] }, errors: { type: 'object', minProperties: 1 } } };",
+                  "pm.test('Status code is 400 Bad Request', function () { pm.response.to.have.status(400); });",
+                  "pm.test('Body matches the validation problem schema', function () { pm.response.to.have.jsonSchema(problemSchema); });",
+                  "pm.test('Errors identify the invalid fields', function () { const errors = pm.response.json().errors; pm.expect(errors).to.have.property('Price'); pm.expect(errors).to.have.property('RoomId'); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"{{supplierId}}\",\n  \"reservationId\": \"{{reservationId}}\",\n  \"roomId\": \"\",\n  \"checkIn\": \"2026-08-03T00:00:00Z\",\n  \"checkOut\": \"2026-08-01T00:00:00Z\",\n  \"price\": -1,\n  \"updatedAtUtc\": \"2026-07-01T10:15:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "ingest"
+              ]
+            },
+            "description": "Blank roomId, negative price and checkIn after checkOut. Invalid requests do not consume rate-limit quota."
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Stats Endpoint",
+      "description": "Run after folder 1 in the same run so the counts below are exact.",
+      "item": [
+        {
+          "name": "Get Supplier Stats (200 OK)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const statsSchema = { type: 'object', required: ['supplierId', 'ingestedCount', 'throttledCount'], properties: { supplierId: { type: 'string', minLength: 1 }, ingestedCount: { type: 'integer', minimum: 0 }, throttledCount: { type: 'integer', minimum: 0 } } };",
+                  "pm.test('Status code is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Body matches the stats schema', function () { pm.response.to.have.jsonSchema(statsSchema); });",
+                  "pm.test('Supplier id is echoed back', function () { pm.expect(pm.response.json().supplierId).to.eql(pm.collectionVariables.get('supplierId')); });",
+                  "pm.test('Ingested count is 5 and throttled count is 0', function () { const stats = pm.response.json(); pm.expect(stats.ingestedCount).to.eql(5); pm.expect(stats.throttledCount).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/stats/{{supplierId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "stats",
+                "{{supplierId}}"
+              ]
+            },
+            "description": "After folder 1 the supplier has 5 ingested requests (created, duplicate, updated, stale, conflict) and 0 throttled. The invalid request is not counted."
+          }
+        },
+        {
+          "name": "Get Unknown Supplier Stats (200 OK with zeros)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const statsSchema = { type: 'object', required: ['supplierId', 'ingestedCount', 'throttledCount'], properties: { supplierId: { type: 'string', minLength: 1 }, ingestedCount: { type: 'integer', minimum: 0 }, throttledCount: { type: 'integer', minimum: 0 } } };",
+                  "pm.test('Status code is 200 OK', function () { pm.response.to.have.status(200); });",
+                  "pm.test('Body matches the stats schema', function () { pm.response.to.have.jsonSchema(statsSchema); });",
+                  "pm.test('Counts are zero', function () { const stats = pm.response.json(); pm.expect(stats.ingestedCount).to.eql(0); pm.expect(stats.throttledCount).to.eql(0); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/stats/unknown-{{runId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "stats",
+                "unknown-{{runId}}"
+              ]
+            },
+            "description": "A supplier that has never sent a request returns 200 with zero counts rather than 404."
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Rate Limiting",
+      "description": "Documents the 100 requests per rolling 60 seconds per supplier limit.",
+      "item": [
+        {
+          "name": "Burst Ingest (429 Too Many Requests after 100 per 60s)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.info.iteration === 0) { pm.collectionVariables.set('rateLimitSupplierId', 'rate-limit-' + Date.now()); }",
+                  "pm.collectionVariables.set('burstReservationId', 'burst-' + pm.info.iteration + '-' + Date.now());"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const ingestSchema = { type: 'object', required: ['status', 'message'], properties: { status: { type: 'string', enum: ['Conflict', 'Created', 'Duplicate', 'StaleIgnored', 'Throttled', 'Updated'] }, message: { type: 'string', minLength: 1 } } };",
+                  "const expectedCode = pm.info.iteration < 100 ? 201 : 429;",
+                  "pm.test('Iteration ' + (pm.info.iteration + 1) + ' returns ' + expectedCode, function () { pm.response.to.have.status(expectedCode); });",
+                  "pm.test('Body matches the ingest response schema', function () { pm.response.to.have.jsonSchema(ingestSchema); });",
+                  "if (pm.response.code === 429) {",
+                  "  pm.test('Retry-After header holds a positive whole number of seconds', function () { const retryAfter = Number(pm.response.headers.get('Retry-After')); pm.expect(Number.isInteger(retryAfter)).to.eql(true); pm.expect(retryAfter).to.be.within(1, 60); });",
+                  "  pm.test('Outcome status is Throttled', function () { pm.expect(pm.response.json().status).to.eql('Throttled'); });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierId\": \"{{rateLimitSupplierId}}\",\n  \"reservationId\": \"{{burstReservationId}}\",\n  \"roomId\": \"room-101\",\n  \"checkIn\": \"2026-08-01T00:00:00Z\",\n  \"checkOut\": \"2026-08-03T00:00:00Z\",\n  \"price\": 450.00,\n  \"updatedAtUtc\": \"2026-07-01T10:15:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/reservations/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "reservations",
+                "ingest"
+              ]
+            },
+            "description": "Run this folder in the Collection Runner with 101 or more iterations. Each iteration sends a new reservation for the same supplier. Iterations 1-100 are accepted (201); iteration 101 onward returns 429 with a Retry-After header until the rolling 60 second window frees capacity. Throttled requests do not consume quota. Sending it once from the request tab just returns 201."
+          },
+          "response": [
+            {
+              "name": "429 Too Many Requests",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"supplierId\": \"{{rateLimitSupplierId}}\",\n  \"reservationId\": \"{{burstReservationId}}\",\n  \"roomId\": \"room-101\",\n  \"checkIn\": \"2026-08-01T00:00:00Z\",\n  \"checkOut\": \"2026-08-03T00:00:00Z\",\n  \"price\": 450.00,\n  \"updatedAtUtc\": \"2026-07-01T10:15:00Z\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/api/reservations/ingest",
+                  "host": [
+                    "{{baseUrl}}"
+                  ],
+                  "path": [
+                    "api",
+                    "reservations",
+                    "ingest"
+                  ]
+                }
+              },
+              "status": "Too Many Requests",
+              "code": 429,
+              "_postman_previewlanguage": "json",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json; charset=utf-8"
+                },
+                {
+                  "key": "Retry-After",
+                  "value": "60"
+                }
+              ],
+              "cookie": [],
+              "body": "{\n  \"message\": \"Supplier rate limit exceeded; retry after the indicated delay\",\n  \"status\": \"Throttled\"\n}"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "runId",
+      "value": "manual",
+      "type": "string"
+    },
+    {
+      "key": "supplierId",
+      "value": "supplier-manual",
+      "type": "string"
+    },
+    {
+      "key": "reservationId",
+      "value": "reservation-manual",
+      "type": "string"
+    },
+    {
+      "key": "rateLimitSupplierId",
+      "value": "rate-limit-manual",
+      "type": "string"
+    },
+    {
+      "key": "burstReservationId",
+      "value": "burst-manual",
+      "type": "string"
+    }
+  ]
+}
