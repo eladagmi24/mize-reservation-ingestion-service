@@ -17,9 +17,13 @@ builder.Services.AddHostedService<DatabaseInitializer>();
 builder.Services
     .AddControllers()
     .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var application = builder.Build();
 
+application.UseSwagger();
+application.UseSwaggerUI();
 application.MapControllers();
 
 application.Run();
