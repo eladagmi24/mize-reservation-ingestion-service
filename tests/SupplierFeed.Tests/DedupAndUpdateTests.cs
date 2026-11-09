@@ -1,5 +1,6 @@
 using System.Net;
 using FluentAssertions;
+using SupplierFeed.Api.Contracts;
 using SupplierFeed.Api.Domain;
 using SupplierFeed.Tests.Infrastructure;
 
@@ -132,6 +133,33 @@ public sealed class DedupAndUpdateTests : IDisposable
         var storedAfterResend = await _factory.FindReservationAsync(SupplierId, ReservationId);
         storedAfterResend.Should().BeEquivalentTo(storedBeforeResend);
         (await _factory.CountReservationsAsync(SupplierId, ReservationId)).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task Ingest_IdenticalPayloadWithNewerTimestamp_Returns200DuplicateWithoutModifyingDb()
+    {
+        var request = TestRequests.Create(SupplierId, ReservationId);
+        await _client.PostIngestAsync(request);
+        var storedBeforeResend = await _factory.FindReservationAsync(SupplierId, ReservationId);
+        _factory.Clock.Advance(TimeSpan.FromMinutes(10));
+        var newerRequest = new ReservationIngestRequest
+        {
+            CheckIn = request.CheckIn,
+            CheckOut = request.CheckOut,
+            Price = request.Price,
+            ReservationId = request.ReservationId,
+            RoomId = request.RoomId,
+            SupplierId = request.SupplierId,
+            UpdatedAtUtc = request.UpdatedAtUtc.AddHours(1)
+        };
+
+        var response = await _client.PostIngestAsync(newerRequest);
+        var body = await response.ReadIngestResponseAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        body.Status.Should().Be(IngestionOutcome.Duplicate);
+        var storedAfterResend = await _factory.FindReservationAsync(SupplierId, ReservationId);
+        storedAfterResend.Should().BeEquivalentTo(storedBeforeResend);
     }
 
     [Fact]

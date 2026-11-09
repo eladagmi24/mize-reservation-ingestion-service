@@ -51,7 +51,7 @@ public sealed class ReservationIngestService : IReservationIngestService
     {
         var incomingReservation = BuildIncomingReservation(request);
 
-        var rateLimitDecision = _rateLimiter.TryAcquire(incomingReservation.SupplierId);
+        var rateLimitDecision = await _rateLimiter.TryAcquireAsync(incomingReservation.SupplierId, cancellationToken);
         if (!rateLimitDecision.IsAllowed)
         {
             await RecordThrottledRequestAsync(incomingReservation, cancellationToken);

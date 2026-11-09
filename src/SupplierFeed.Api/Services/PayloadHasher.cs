@@ -8,7 +8,7 @@ public static class PayloadHasher
 {
     #region Constants
     private const string FieldSeparator = "|";
-    private const string PriceFormat = "0.00";
+    private const decimal TrailingZeroNormalizer = 1.0000000000000000000000000000m;
     private const string UtcTimestampFormat = "O";
     #endregion
 
@@ -28,7 +28,7 @@ public static class PayloadHasher
             roomId.Trim(),
             FormatUtcTimestamp(checkIn),
             FormatUtcTimestamp(checkOut),
-            price.ToString(PriceFormat, CultureInfo.InvariantCulture));
+            (price / TrailingZeroNormalizer).ToString(CultureInfo.InvariantCulture));
     }
 
     private static string FormatUtcTimestamp(DateTime value)

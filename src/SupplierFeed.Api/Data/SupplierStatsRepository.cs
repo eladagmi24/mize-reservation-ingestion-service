@@ -99,29 +99,4 @@ public sealed class SupplierStatsRepository : ISupplierStatsRepository
         return condition ? 1 : 0;
     }
     #endregion
-
-    #region Nested Types
-    private sealed class SupplierStatsRow
-    {
-        #region Properties
-        public long ConflictCount { get; init; }
-
-        public long CreatedCount { get; init; }
-
-        public long DuplicateCount { get; init; }
-
-        public long IngestedCount { get; init; }
-
-        public string? LastRequestUtc { get; init; }
-
-        public long StaleCount { get; init; }
-
-        public string SupplierId { get; init; } = string.Empty;
-
-        public long ThrottledCount { get; init; }
-
-        public long UpdatedCount { get; init; }
-        #endregion
-    }
-    #endregion
 }

@@ -3,6 +3,6 @@ namespace SupplierFeed.Api.Services;
 public interface IRateLimiter
 {
     #region Operations
-    RateLimitDecision TryAcquire(string supplierId);
+    Task<RateLimitResult> TryAcquireAsync(string supplierId, CancellationToken cancellationToken);
     #endregion
 }

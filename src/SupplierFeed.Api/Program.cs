@@ -9,7 +9,7 @@ builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(Dat
 builder.Services.Configure<RateLimitOptions>(builder.Configuration.GetSection(RateLimitOptions.SectionName));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<IDbConnectionFactory, SqliteConnectionFactory>();
-builder.Services.AddSingleton<IRateLimiter, SlidingWindowRateLimiter>();
+builder.Services.AddSingleton<IRateLimiter, SqliteRateLimiter>();
 builder.Services.AddSingleton<IReservationIngestService, ReservationIngestService>();
 builder.Services.AddSingleton<IReservationRepository, ReservationRepository>();
 builder.Services.AddSingleton<ISupplierStatsRepository, SupplierStatsRepository>();

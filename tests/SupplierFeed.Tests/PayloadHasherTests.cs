@@ -22,6 +22,15 @@ public sealed class PayloadHasherTests
     }
 
     [Fact]
+    public void ComputeHash_WhenPriceDiffersByFractionOfCent_ReturnsDifferentHash()
+    {
+        var original = PayloadHasher.ComputeHash("room-1", CheckIn, CheckOut, 450.001m);
+        var changed = PayloadHasher.ComputeHash("room-1", CheckIn, CheckOut, 450.002m);
+
+        changed.Should().NotEqual(original);
+    }
+
+    [Fact]
     public void ComputeHash_WhenPriceDiffers_ReturnsDifferentHash()
     {
         var original = PayloadHasher.ComputeHash("room-1", CheckIn, CheckOut, 450.00m);

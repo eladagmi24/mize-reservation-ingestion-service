@@ -32,6 +32,14 @@ public sealed class DatabaseInitializer : IHostedService
             conflict_count   INTEGER NOT NULL DEFAULT 0,
             last_request_utc TEXT
         ) WITHOUT ROWID;
+
+        CREATE TABLE IF NOT EXISTS supplier_request_admissions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            supplier_id     TEXT NOT NULL,
+            admitted_at_utc TEXT NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS ix_supplier_admissions_window ON supplier_request_admissions(supplier_id, admitted_at_utc);
         """;
 
     private const string EnableWriteAheadLoggingCommand = "PRAGMA journal_mode = WAL;";
